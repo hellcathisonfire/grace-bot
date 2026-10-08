@@ -5,7 +5,7 @@ import { ApiError, getLive, getPlayer, getRegionRank, isBhId, searchRanked } fro
 import { getLink, getPanels, removeLink, setLink, setPanels, usingRedis } from "./store.mjs";
 import { startHealth } from "./health.mjs";
 import { ensureSetup } from "./setup.mjs";
-import { errorMessage, liveEmbed, liveMessage, linkedMessage, noticeMessage, profileMessage, searchMessage } from "./ui.mjs";
+import { errorMessage, liveEmbeds, liveMessage, linkedMessage, noticeMessage, profileMessage, searchMessage } from "./ui.mjs";
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const EPHEMERAL = MessageFlags.Ephemeral;
@@ -93,7 +93,7 @@ export const handlers = {
     const mode = i.options.getString("mode") ?? "1v1", region = i.options.getString("region") ?? "BRZ";
     const v = await getLive(mode, region);
     await dropOld();
-    const msg = await i.channel.send({ embeds: [liveEmbed(v)] });
+    const msg = await i.channel.send({ embeds: liveEmbeds(v) });
     await setPanels([...panels.filter((p) => p.guildId !== i.guildId), { guildId: i.guildId, channelId: i.channelId, messageId: msg.id, mode, region }]);
     await i.editReply(noticeMessage("Live panel started", `It will refresh itself every ~2 minutes. Use \`/livepanel stop\` to remove it.`));
   },
@@ -132,7 +132,7 @@ async function tickPanels() {
     try {
       const v = await getLive(pn.mode, pn.region);
       const msg = await (await client.channels.fetch(pn.channelId)).messages.fetch(pn.messageId);
-      await msg.edit({ embeds: [liveEmbed(v)] });
+      await msg.edit({ embeds: liveEmbeds(v) });
       keep.push(pn);
     } catch (e) {
       if ([10003, 10008, 50001, 50013].includes(e.code)) console.log(`Painel removido (${e.code}): servidor ${pn.guildId}`);   // canal/mensagem sumiu ou sem permissão

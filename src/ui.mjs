@@ -173,32 +173,83 @@ export const noticeMessage = (title, text, color = ACCENT) => ({ embeds: [new Em
 export const errorMessage = (text) => noticeMessage("Something went wrong", text, ERROR_COLOR);
 
 // ---------- Live Ranked ----------
-export function liveEmbed(v) {
-  const e = new EmbedBuilder().setColor(ACCENT).setTitle(`Live Ranked  ·  ${v.mode === "rotating" ? "Rotating" : v.mode}  ·  ${v.region}`).setURL(`${SITE}/live`)
-    .setAuthor({ name: "GraceHalla  ·  Live", iconURL: `${SITE}/apple-icon.png` })
-    .setFooter({ text: "Detected from the ranked leaderboard  ·  refreshes about every 2 min", iconURL: `${SITE}/apple-icon.png` })
-    .setTimestamp(v.ts ? new Date(v.ts) : new Date());
-  const active = (v.players ?? []).filter((p) => p.status === "active");
-  const head = [`🟢  **${active.length}** playing now  ·  **${n(v.hour?.games)}** games in the last hour`];
-  if (v.hour?.bestGain) head.push(`🔥  Best gain: **${names(v.hour.bestGain.names)}** ${signed(v.hour.bestGain.delta)}`);
+// Uma mensagem, vários embeds: cabeçalho + um cartão por jogador (barra verde/vermelha pela última partida, ícone da lenda
+// como thumbnail) + um cartão com as últimas partidas. Limites do Discord: 10 embeds, 6000 caracteres no total.
+const WIN = 0x4ade80, LOSS = 0xf87171;
+const trend = (d) => (d > 0 ? `▲ **${signed(d)}**` : d < 0 ? `▼ **${signed(d)}**` : `▬ **±0**`);
+const hasId = (m, p) => (m.ids ?? []).some((id) => (p.ids ?? []).includes(id));
+const isWin = (m) => m.wins >= m.losses;
+const squares = (list) => list.map((m) => (isWin(m) ? "🟩" : "🟥")).join("");
+const shortName = (a, max = 40) => { const s = names(a); return s.length > max ? s.slice(0, max - 1) + "…" : s; };
+const ago = (ms) => `<t:${Math.floor(ms / 1000)}:R>`;
+// sequência atual de vitórias/derrotas (a partir da partida mais recente)
+function streak(recentFirst) {
+  if (!recentFirst.length) return null;
+  const w = isWin(recentFirst[0]); let k = 0;
+  for (const m of recentFirst) { if (isWin(m) === w) k++; else break; }
+  return k >= 3 ? { win: w, k } : null;
+}
+
+const PLAYER_CARDS = 4, MATCH_ROWS = 6;
+
+function playerCard(p, feed) {
+  const t = tierInfo(p.tier), s = p.session;
+  const active = p.status === "active";
+  const recent = feed.filter((m) => hasId(m, p)).slice(0, 5);          // mais recente primeiro
+  const last = recent[0];
+  const color = last ? (isWin(last) ? WIN : LOSS) : s?.games ? (s.delta > 0 ? WIN : s.delta < 0 ? LOSS : t.color) : t.color;
+  const st = streak(recent);
+
+  const l1 = [`${t.emoji} **${n(p.rating)}**`];
+  if (p.tier) l1.push(`*${p.tier}*`);
+  if (s?.games) l1.push(trend(s.delta));
+  const lines = [l1.join("  ·  ")];
+  if (s?.games) lines.push(`${recent.length ? squares([...recent].reverse()) + "  " : ""}**${s.wins}**W **${s.losses}**L  ·  ${pct(s.wins, s.games)}${st ? `  ·  ${st.win ? "🔥" : "🧊"} ${st.k}` : ""}`);
+  const foot = [active ? "🟢 Playing now" : "⚪ Idle"];
+  if (p.legend?.name) foot.push(`⚔️ ${pretty(p.legend.name)}`);
+  if (p.rank) foot.push(`#${n(p.rank)}`);
+  lines.push(`-# ${foot.join("  ·  ")}`);
+
+  const e = new EmbedBuilder().setColor(color).setTitle(shortName(p.names, 32)).setDescription(lines.join("\n"));
+  if (p.legend?.name) e.setThumbnail(legendIcon(p.legend.name));
+  return e;
+}
+
+export function liveEmbeds(v) {
+  const mode = v.mode === "rotating" ? "Rotating" : v.mode;
+  const all = v.players ?? [];
+  const feed = v.feed ?? [];
+  const active = all.filter((p) => p.status === "active").length;
+
+  const head = [`🟢 **${active}** playing now  ·  🎮 **${n(v.hour?.games)}** games in the last hour`];
+  if (v.hour?.games) head.push(`📊 **${pct(v.hour.wins, v.hour.games)}** wins  ·  👥 **${n(v.hour.players)}** players`);
+  if (v.hour?.bestGain) head.push(`🔥 Best gain  **${shortName(v.hour.bestGain.names, 28)}**  ▲ **${signed(v.hour.bestGain.delta)}**`);
   if (v.cold) head.push("\n*Warming up: I need two snapshots to spot matches. Check back in a couple of minutes.*");
   if (v.stale) head.push("\n*Official API hiccup: showing the last known state.*");
-  e.setDescription(head.join("\n"));
+  if (!all.length && !v.cold) head.push("\n*Nobody tracked right now.*");
 
-  const now = (v.players ?? []).slice(0, 8).map((p) => {
-    const t = tierInfo(p.tier);
-    const sess = p.session?.games ? `  ·  ${signed(p.session.delta)} (${p.session.wins}W ${p.session.losses}L)` : "";
-    const dot = p.status === "active" ? "🟢" : "⚪";
-    return `${dot} **${names(p.names)}**  ${t.emoji} ${n(p.rating)}${sess}${p.legend?.name ? `  ·  ${pretty(p.legend.name)}` : ""}`;
-  });
-  e.addFields({ name: "Players", value: now.length ? clip(now.join("\n")) : "*Nobody tracked right now.*" });
+  const header = new EmbedBuilder().setColor(ACCENT).setTitle(`Live Ranked  ·  ${mode}  ·  ${v.region}`).setURL(`${SITE}/live`)
+    .setAuthor({ name: "GraceHalla  ·  Live", iconURL: `${SITE}/apple-icon.png` });
+  const out = [header];
 
-  const feed = (v.feed ?? []).slice(0, 7).map((m) => {
-    const won = m.wins >= m.losses;
-    return `${won ? "🟢" : "🔴"} **${names(m.names)}**  ${signed(m.delta)} → ${n(m.rating)}${m.legend?.name ? `  ·  ${pretty(m.legend.name)}` : ""}  ·  <t:${Math.floor(m.t / 1000)}:R>`;
+  // quem está jogando agora primeiro; depois por elo
+  const ranked = [...all].sort((a, b) => (b.status === "active") - (a.status === "active") || (b.rating ?? 0) - (a.rating ?? 0));
+  for (const p of ranked.slice(0, PLAYER_CARDS)) out.push(playerCard(p, feed));
+  if (all.length > PLAYER_CARDS) head.push(`-# +${all.length - PLAYER_CARDS} more tracked on the [site](${SITE}/live)`);
+  header.setDescription(head.join("\n"));
+
+  const rows = feed.slice(0, MATCH_ROWS).map((m) => {
+    const t = tierInfo(m.tier);
+    const sub = [m.legend?.name ? `⚔️ ${pretty(m.legend.name)}` : null, ago(m.t)].filter(Boolean).join("  ·  ");
+    return `${isWin(m) ? "🟩" : "🟥"} **${shortName(m.names, 26)}**  ${trend(m.delta)}  →  ${t.emoji} **${n(m.rating)}**\n-# ${sub}`;
   });
-  e.addFields({ name: "Latest matches", value: feed.length ? clip(feed.join("\n")) : "*No matches detected yet.*" });
-  return e;
+  if (rows.length || all.length) {
+    out.push(new EmbedBuilder().setColor(ACCENT).setTitle("Latest matches").setDescription(rows.length ? clip(rows.join("\n"), 4000) : "*No matches detected yet.*"));
+  }
+
+  out[out.length - 1].setFooter({ text: "Detected from the ranked leaderboard  ·  refreshes about every 2 min", iconURL: `${SITE}/apple-icon.png` })
+    .setTimestamp(v.ts ? new Date(v.ts) : new Date());
+  return out;
 }
 
 export function liveComponents(mode, region) {
@@ -212,4 +263,4 @@ export function liveComponents(mode, region) {
   return [buttons, select];
 }
 
-export const liveMessage = (v, mode, region) => ({ embeds: [liveEmbed(v)], components: liveComponents(mode, region) });
+export const liveMessage = (v, mode, region) => ({ embeds: liveEmbeds(v), components: liveComponents(mode, region) });

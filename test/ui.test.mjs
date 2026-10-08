@@ -19,6 +19,8 @@ const player = {
 const unranked = { ...player, ranked: null, clan: null, legends: [] };
 
 const check = (m, label) => {
+  assert.ok(m.embeds.length <= 10, `${label}: embeds`);
+  assert.ok(m.embeds.reduce((a, e) => { const j = e.toJSON(); return a + (j.title?.length ?? 0) + (j.description?.length ?? 0) + (j.footer?.text.length ?? 0) + (j.author?.name.length ?? 0) + (j.fields ?? []).reduce((b, f) => b + f.name.length + f.value.length, 0); }, 0) <= 6000, `${label}: message total`);
   for (const e of m.embeds) {
     const j = e.toJSON();
     const total = (j.title?.length ?? 0) + (j.description?.length ?? 0) + (j.footer?.text.length ?? 0) + (j.author?.name.length ?? 0) + (j.fields ?? []).reduce((a, f) => a + f.name.length + f.value.length, 0);
