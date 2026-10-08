@@ -179,18 +179,26 @@ const hasId = (m, p) => (m.ids ?? []).some((id) => (p.ids ?? []).includes(id));
 const isWin = (m) => m.wins >= m.losses;
 const shortName = (a, max = 22) => { const s = names(a); return s.length > max ? s.slice(0, max - 1) + "…" : s; };
 
-const PLAYERS_SHOWN = 5, MATCHES_SHOWN = 6;
+const PLAYERS_SHOWN = 4, MATCHES_SHOWN = 6;
+
+// sequência atual (3+ vitórias ou derrotas seguidas), a partir da partida mais recente
+function streak(recentFirst) {
+  if (!recentFirst.length) return "";
+  const w = isWin(recentFirst[0]); let k = 0;
+  for (const m of recentFirst) { if (isWin(m) === w) k++; else break; }
+  return k >= 3 ? `${w ? "🔥" : "🧊"} ${k} ${w ? "wins" : "losses"} in a row` : "";
+}
 
 function playerLines(p, feed) {
   const t = tierInfo(p.tier), s = p.session;
-  const recent = feed.filter((m) => hasId(m, p)).slice(0, 5).reverse();  // mais antigo → mais recente
   const dot = p.status === "active" ? "🟢" : "⚪";
-  const l1 = `${dot} ${t.emoji} **${n(p.rating)}**${s?.games ? `  ${trend(s.delta)}` : ""}  ·  **${shortName(p.names)}**`;
+  const l1 = `${dot}  ${t.emoji}  **${n(p.rating)}**${s?.games ? `   ${trend(s.delta)}` : ""}   **${shortName(p.names)}**`;
   const sub = [];
   if (p.legend?.name) sub.push(`⚔️ ${pretty(p.legend.name)}`);
-  if (s?.games) sub.push(`${s.wins}W ${s.losses}L`);
-  if (recent.length) sub.push(recent.map((m) => (isWin(m) ? "🟩" : "🟥")).join(""));
+  if (s?.games) sub.push(`${s.wins}W ${s.losses}L (${pct(s.wins, s.games)})`);
   if (p.rank) sub.push(`#${n(p.rank)}`);
+  const st = streak(feed.filter((m) => hasId(m, p)).slice(0, 6));
+  if (st) sub.push(st);
   return sub.length ? `${l1}\n-# ${sub.join("  ·  ")}` : l1;
 }
 
@@ -218,7 +226,7 @@ export function liveEmbeds(v) {
   if (all.length > PLAYERS_SHOWN) head.push(`-# +${all.length - PLAYERS_SHOWN} more on the [site](${SITE}/live)`);
   e.setDescription(head.join("\n"));
 
-  if (shown.length) e.addFields({ name: "Players", value: clip(shown.map((p) => playerLines(p, feed)).join("\n")) });
+  if (shown.length) e.addFields({ name: "Players", value: clip(shown.map((p) => playerLines(p, feed)).join("\n\n")) });
   else if (!v.cold) e.addFields({ name: "Players", value: "*Nobody tracked right now.*" });
 
   const rows = feed.slice(0, MATCHES_SHOWN).map((m) =>
