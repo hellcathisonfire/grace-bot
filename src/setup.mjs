@@ -20,10 +20,18 @@ export async function ensureSetup(appId) {
     const body = payload();
     const h = sha(JSON.stringify(body) + (guilds.join(",") || "global"));
     if ((await getMeta("cmdHash")) !== h) {
-      if (guilds.length) for (const g of guilds) await rest.put(Routes.applicationGuildCommands(appId, g), { body });
-      else await rest.put(Routes.applicationCommands(appId), { body });
-      await setMeta("cmdHash", h);
-      console.log(`Comandos registrados ${guilds.length ? "no(s) servidor(es) " + guilds.join(", ") : "globalmente (podem levar até 1 h para aparecer)"}.`);
+      let failed = 0;
+      if (guilds.length) {
+        for (const g of guilds) {                                          // um servidor com problema não derruba os outros
+          try { await rest.put(Routes.applicationGuildCommands(appId, g), { body }); }
+          catch (e) { failed++; console.error(`Servidor ${g}: não consegui registrar os comandos (${e.message}). O ID está certo e o bot foi convidado com o escopo applications.commands?`); }
+        }
+      } else await rest.put(Routes.applicationCommands(appId), { body });
+      if (failed) console.error(`Comandos registrados em ${guilds.length - failed} de ${guilds.length} servidor(es). Tento de novo no próximo início.`);
+      else {
+        await setMeta("cmdHash", h);                                      // só marca como feito se deu certo em todos
+        console.log(`Comandos registrados ${guilds.length ? "no(s) servidor(es) " + guilds.join(", ") : "globalmente (podem levar até 1 h para aparecer)"}.`);
+      }
     }
   } catch (e) { console.error("Não consegui registrar os comandos:", e.message); }
 
