@@ -1,0 +1,20 @@
+# Opcional: "Blueprint" do Render (New + → Blueprint). Se preferir o jeito manual, veja o README.
+services:
+  - type: web
+    name: grace-bot
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: DISCORD_TOKEN
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: GRACEHALLA_URL
+        value: https://grace-halla.vercel.app
+      - key: DAIR_API_BASE
+        value: https://api.dair.gg

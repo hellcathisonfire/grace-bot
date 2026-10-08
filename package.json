@@ -1,0 +1,20 @@
+{
+  "name": "grace-bot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Grace, the GraceHalla Discord bot: player profiles, search and live ranked.",
+  "type": "module",
+  "engines": {
+    "node": ">=20.6"
+  },
+  "scripts": {
+    "start": "node src/index.mjs",
+    "dev": "node --env-file=.env src/index.mjs",
+    "deploy": "node --env-file=.env src/deploy.mjs",
+    "avatar": "node --env-file=.env src/avatar.mjs",
+    "test": "node test/ui.test.mjs && node test/handlers.test.mjs"
+  },
+  "dependencies": {
+    "discord.js": "^14.17.0"
+  }
+}
