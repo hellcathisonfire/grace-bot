@@ -173,83 +173,59 @@ export const noticeMessage = (title, text, color = ACCENT) => ({ embeds: [new Em
 export const errorMessage = (text) => noticeMessage("Something went wrong", text, ERROR_COLOR);
 
 // ---------- Live Ranked ----------
-// Uma mensagem, vários embeds: cabeçalho + um cartão por jogador (barra verde/vermelha pela última partida, ícone da lenda
-// como thumbnail) + um cartão com as últimas partidas. Limites do Discord: 10 embeds, 6000 caracteres no total.
-const WIN = 0x4ade80, LOSS = 0xf87171;
+// Um único embed compacto: resumo, jogadores (2 linhas cada) e últimas partidas (1 linha cada).
 const trend = (d) => (d > 0 ? `▲ **${signed(d)}**` : d < 0 ? `▼ **${signed(d)}**` : `▬ **±0**`);
 const hasId = (m, p) => (m.ids ?? []).some((id) => (p.ids ?? []).includes(id));
 const isWin = (m) => m.wins >= m.losses;
-const squares = (list) => list.map((m) => (isWin(m) ? "🟩" : "🟥")).join("");
-const shortName = (a, max = 40) => { const s = names(a); return s.length > max ? s.slice(0, max - 1) + "…" : s; };
-const ago = (ms) => `<t:${Math.floor(ms / 1000)}:R>`;
-// sequência atual de vitórias/derrotas (a partir da partida mais recente)
-function streak(recentFirst) {
-  if (!recentFirst.length) return null;
-  const w = isWin(recentFirst[0]); let k = 0;
-  for (const m of recentFirst) { if (isWin(m) === w) k++; else break; }
-  return k >= 3 ? { win: w, k } : null;
-}
+const shortName = (a, max = 22) => { const s = names(a); return s.length > max ? s.slice(0, max - 1) + "…" : s; };
 
-const PLAYER_CARDS = 4, MATCH_ROWS = 6;
+const PLAYERS_SHOWN = 5, MATCHES_SHOWN = 6;
 
-function playerCard(p, feed) {
+function playerLines(p, feed) {
   const t = tierInfo(p.tier), s = p.session;
-  const active = p.status === "active";
-  const recent = feed.filter((m) => hasId(m, p)).slice(0, 5);          // mais recente primeiro
-  const last = recent[0];
-  const color = last ? (isWin(last) ? WIN : LOSS) : s?.games ? (s.delta > 0 ? WIN : s.delta < 0 ? LOSS : t.color) : t.color;
-  const st = streak(recent);
-
-  const l1 = [`${t.emoji} **${n(p.rating)}**`];
-  if (p.tier) l1.push(`*${p.tier}*`);
-  if (s?.games) l1.push(trend(s.delta));
-  const lines = [l1.join("  ·  ")];
-  if (s?.games) lines.push(`${recent.length ? squares([...recent].reverse()) + "  " : ""}**${s.wins}**W **${s.losses}**L  ·  ${pct(s.wins, s.games)}${st ? `  ·  ${st.win ? "🔥" : "🧊"} ${st.k}` : ""}`);
-  const foot = [active ? "🟢 Playing now" : "⚪ Idle"];
-  if (p.legend?.name) foot.push(`⚔️ ${pretty(p.legend.name)}`);
-  if (p.rank) foot.push(`#${n(p.rank)}`);
-  lines.push(`-# ${foot.join("  ·  ")}`);
-
-  const e = new EmbedBuilder().setColor(color).setTitle(shortName(p.names, 32)).setDescription(lines.join("\n"));
-  if (p.legend?.name) e.setThumbnail(legendIcon(p.legend.name));
-  return e;
+  const recent = feed.filter((m) => hasId(m, p)).slice(0, 5).reverse();  // mais antigo → mais recente
+  const dot = p.status === "active" ? "🟢" : "⚪";
+  const l1 = `${dot} ${t.emoji} **${n(p.rating)}**${s?.games ? `  ${trend(s.delta)}` : ""}  ·  **${shortName(p.names)}**`;
+  const sub = [];
+  if (p.legend?.name) sub.push(`⚔️ ${pretty(p.legend.name)}`);
+  if (s?.games) sub.push(`${s.wins}W ${s.losses}L`);
+  if (recent.length) sub.push(recent.map((m) => (isWin(m) ? "🟩" : "🟥")).join(""));
+  if (p.rank) sub.push(`#${n(p.rank)}`);
+  return sub.length ? `${l1}\n-# ${sub.join("  ·  ")}` : l1;
 }
 
 export function liveEmbeds(v) {
   const mode = v.mode === "rotating" ? "Rotating" : v.mode;
   const all = v.players ?? [];
   const feed = v.feed ?? [];
-  const active = all.filter((p) => p.status === "active").length;
+  const active = all.filter((p) => p.status === "active");
 
-  const head = [`🟢 **${active}** playing now  ·  🎮 **${n(v.hour?.games)}** games in the last hour`];
-  if (v.hour?.games) head.push(`📊 **${pct(v.hour.wins, v.hour.games)}** wins  ·  👥 **${n(v.hour.players)}** players`);
+  const head = [`🟢 **${active.length}** playing  ·  🎮 **${n(v.hour?.games)}** games/hour${v.hour?.games ? `  ·  📊 **${pct(v.hour.wins, v.hour.games)}** wins` : ""}`];
   if (v.hour?.bestGain) head.push(`🔥 Best gain  **${shortName(v.hour.bestGain.names, 28)}**  ▲ **${signed(v.hour.bestGain.delta)}**`);
-  if (v.cold) head.push("\n*Warming up: I need two snapshots to spot matches. Check back in a couple of minutes.*");
-  if (v.stale) head.push("\n*Official API hiccup: showing the last known state.*");
-  if (!all.length && !v.cold) head.push("\n*Nobody tracked right now.*");
+  if (v.cold) head.push("*Warming up: I need two snapshots to spot matches. Check back in a couple of minutes.*");
+  if (v.stale) head.push("*Official API hiccup: showing the last known state.*");
 
-  const header = new EmbedBuilder().setColor(ACCENT).setTitle(`Live Ranked  ·  ${mode}  ·  ${v.region}`).setURL(`${SITE}/live`)
-    .setAuthor({ name: "GraceHalla  ·  Live", iconURL: `${SITE}/apple-icon.png` });
-  const out = [header];
+  const e = new EmbedBuilder().setColor(ACCENT).setTitle(`Live Ranked  ·  ${mode}  ·  ${v.region}`).setURL(`${SITE}/live`)
+    .setAuthor({ name: "GraceHalla  ·  Live", iconURL: `${SITE}/apple-icon.png` })
+    .setFooter({ text: "Detected from the ranked leaderboard  ·  updates every ~2 min", iconURL: `${SITE}/apple-icon.png` })
+    .setTimestamp(v.ts ? new Date(v.ts) : new Date());
 
   // quem está jogando agora primeiro; depois por elo
   const ranked = [...all].sort((a, b) => (b.status === "active") - (a.status === "active") || (b.rating ?? 0) - (a.rating ?? 0));
-  for (const p of ranked.slice(0, PLAYER_CARDS)) out.push(playerCard(p, feed));
-  if (all.length > PLAYER_CARDS) head.push(`-# +${all.length - PLAYER_CARDS} more tracked on the [site](${SITE}/live)`);
-  header.setDescription(head.join("\n"));
+  const shown = ranked.slice(0, PLAYERS_SHOWN);
+  const lead = shown.find((p) => p.legend?.name);
+  if (lead) e.setThumbnail(legendIcon(lead.legend.name));
+  if (all.length > PLAYERS_SHOWN) head.push(`-# +${all.length - PLAYERS_SHOWN} more on the [site](${SITE}/live)`);
+  e.setDescription(head.join("\n"));
 
-  const rows = feed.slice(0, MATCH_ROWS).map((m) => {
-    const t = tierInfo(m.tier);
-    const sub = [m.legend?.name ? `⚔️ ${pretty(m.legend.name)}` : null, ago(m.t)].filter(Boolean).join("  ·  ");
-    return `${isWin(m) ? "🟩" : "🟥"} **${shortName(m.names, 26)}**  ${trend(m.delta)}  →  ${t.emoji} **${n(m.rating)}**\n-# ${sub}`;
-  });
-  if (rows.length || all.length) {
-    out.push(new EmbedBuilder().setColor(ACCENT).setTitle("Latest matches").setDescription(rows.length ? clip(rows.join("\n"), 4000) : "*No matches detected yet.*"));
-  }
+  if (shown.length) e.addFields({ name: "Players", value: clip(shown.map((p) => playerLines(p, feed)).join("\n")) });
+  else if (!v.cold) e.addFields({ name: "Players", value: "*Nobody tracked right now.*" });
 
-  out[out.length - 1].setFooter({ text: "Detected from the ranked leaderboard  ·  refreshes about every 2 min", iconURL: `${SITE}/apple-icon.png` })
-    .setTimestamp(v.ts ? new Date(v.ts) : new Date());
-  return out;
+  const rows = feed.slice(0, MATCHES_SHOWN).map((m) =>
+    `${isWin(m) ? "🟩" : "🟥"} **${shortName(m.names, 18)}**  ${trend(m.delta)} → **${n(m.rating)}**${m.legend?.name ? `  ·  ${pretty(m.legend.name)}` : ""}  ·  ${`<t:${Math.floor(m.t / 1000)}:R>`}`);
+  if (rows.length) e.addFields({ name: "Latest matches", value: clip(rows.join("\n")) });
+  else if (!v.cold) e.addFields({ name: "Latest matches", value: "*No matches detected yet.*" });
+  return [e];
 }
 
 export function liveComponents(mode, region) {
