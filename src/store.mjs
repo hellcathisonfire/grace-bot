@@ -1,4 +1,4 @@
-// Armazenamento simples: um único documento JSON { links: { [discordId]: brawlhallaId }, panels: [...] }.
+// Armazenamento simples: um único documento JSON { links: { [discordId]: brawlhallaId }, panels: [...], offenders: [...], offPanels: [...] }.
 // Com Upstash (REST) guarda no Redis; sem ele, no arquivo data/grace.json.
 import { mkdir, readFile, writeFile, rename } from "node:fs/promises";
 import { dirname } from "node:path";
@@ -26,6 +26,8 @@ async function load() {
   doc.links ??= {};
   doc.panels ??= [];
   doc.meta ??= {};
+  doc.offenders ??= [];
+  doc.offPanels ??= [];
   return doc;
 }
 
@@ -48,3 +50,9 @@ export async function getPanels() { return (await load()).panels; }
 export async function setPanels(panels) { (await load()).panels = panels; await save(); }
 export async function getMeta(key) { return (await load()).meta[key] ?? null; }
 export async function setMeta(key, value) { (await load()).meta[key] = value; await save(); }
+
+// Grace Offenders: lista de jogadores sinalizados ({ id, name, region, note, addedAt }) e painéis fixados ({ guildId, channelId, messageId }).
+export async function getOffenders() { return (await load()).offenders; }
+export async function setOffenders(list) { (await load()).offenders = list; await save(); }
+export async function getOffPanels() { return (await load()).offPanels; }
+export async function setOffPanels(list) { (await load()).offPanels = list; await save(); }

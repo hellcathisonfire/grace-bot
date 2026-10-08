@@ -5,6 +5,7 @@ import { ApiError, getLive, getPlayer, getRegionRank, isBhId, searchRanked } fro
 import { getLink, getPanels, removeLink, setLink, setPanels, usingRedis } from "./store.mjs";
 import { startHealth } from "./health.mjs";
 import { ensureSetup } from "./setup.mjs";
+import { component as offComponent, modal as offModal, open as offOpen, tickOffPanels } from "./offenders.mjs";
 import { errorMessage, liveEmbeds, liveMessage, linkedMessage, noticeMessage, profileMessage, searchMessage } from "./ui.mjs";
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -30,6 +31,8 @@ async function fail(i, e) {
 
 // ---------- comandos ----------
 export const handlers = {
+  offenders: offOpen,                                     // Grace Offenders: só o dono + senha (src/offenders.mjs)
+
   async link(i) {
     const id = i.options.getString("id", true).trim();
     if (!isBhId(id)) return i.reply({ ...noticeMessage("That doesn't look like an ID", "A Brawlhalla ID is just numbers, for example `66541152`.\nDon't know yours? Use `/search` with your name."), flags: EPHEMERAL });
@@ -102,6 +105,7 @@ export const handlers = {
 // ---------- botões e menus ----------
 export async function component(i) {
   const [kind, a, b, c] = i.customId.split(":");
+  if (kind === "off") return offComponent(i);             // responde por conta própria (abre modal, confere o dono)
   await i.deferUpdate();
   if (kind === "pf") {                                    // pf:<aba>:<id>
     const p = await getPlayer(b);
@@ -120,6 +124,7 @@ client.on(Events.InteractionCreate, async (i) => {
   try {
     if (i.isChatInputCommand()) return void (await handlers[i.commandName]?.(i));
     if (i.isButton() || i.isStringSelectMenu()) return void (await component(i));
+    if (i.isModalSubmit()) return void (await offModal(i));
   } catch (e) { await fail(i, e); }
 });
 
@@ -142,6 +147,11 @@ async function tickPanels() {
   if (keep.length !== panels.length) await setPanels(keep);
 }
 
+async function tickAll() {
+  await tickPanels();
+  await tickOffPanels(client).catch((e) => console.error("tickOffPanels:", e.message));
+}
+
 let ready = false;
 
 client.once(Events.ClientReady, (c) => {
@@ -149,7 +159,7 @@ client.once(Events.ClientReady, (c) => {
   console.log(`Grace online como ${c.user.tag} em ${c.guilds.cache.size} servidor(es). Armazenamento: ${usingRedis ? "Upstash Redis" : "arquivo local (data/grace.json)"}`);
   c.user.setPresence({ activities: [{ name: "Brawlhalla  ·  /profile", type: ActivityType.Playing }], status: "online" });
   ensureSetup(c.application.id).catch((e) => console.error("setup:", e.message));     // registra comandos e foto (só quando mudam)
-  setInterval(() => tickPanels().catch((e) => console.error("tickPanels:", e.message)), PANEL_EVERY_MS);
+  setInterval(() => tickAll().catch((e) => console.error("tickPanels:", e.message)), PANEL_EVERY_MS);
 });
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {   // só conecta quando rodado direto (os testes importam sem conectar)

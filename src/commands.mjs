@@ -19,6 +19,8 @@ export const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).setContexts(InteractionContextType.Guild)
     .addSubcommand((s) => s.setName("start").setDescription("Post a self-updating panel in this channel").addStringOption(modeOpt).addStringOption(regionOpt))
     .addSubcommand((s) => s.setName("stop").setDescription("Stop and remove this server's panel")),
+  // "Grace Offenders": nome de slash command não aceita espaço nem maiúscula, então é /offenders. Só o dono do bot + senha (src/auth.mjs).
+  new SlashCommandBuilder().setName("offenders").setDescription("Grace Offenders · restricted"),
 ];
 
 export const payload = () => commands.map((c) => c.toJSON());

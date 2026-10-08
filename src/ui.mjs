@@ -1,6 +1,7 @@
 // Tudo que o bot mostra: embeds e botões. Mantido num só lugar para o visual ficar consistente.
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, StringSelectMenuBuilder } from "discord.js";
 import { SITE } from "./api.mjs";
+import { legendEmoji, rankEmoji } from "./emoji.mjs";
 
 export const ACCENT = 0xa78bfa;
 export const ERROR_COLOR = 0xf87171;
@@ -22,8 +23,29 @@ export const pretty = (s) => {
 const pad = (s, w) => String(s).slice(0, w).padEnd(w);
 const padL = (s, w) => String(s).slice(0, w).padStart(w);
 const clip = (s, max = 1000) => (s.length <= max ? s : s.slice(0, max - 1).replace(/\n[^\n]*$/, "") + "\n…");
+export const legendSlug = slug;
 const names = (a) => (a?.length ? a.join(" & ") : "?");
-const legendIcon = (name) => `${SITE}/legends-icons/${slug(name)}.png`;
+export const legendIcon = (name) => `${SITE}/legends-icons/${slug(name)}.png`;
+export const playerHref = (id) => `${SITE}/player/${id}`;
+
+// Escapa o que quebraria o markdown dentro de um link ou de um texto em negrito.
+export const esc = (s) => String(s ?? "").replace(/([\\*_~`|>\[\]])/g, "\\$1");
+
+// ---------- regiões e bandeiras ----------
+export const FLAGS = { BRZ: "🇧🇷", "US-E": "🇺🇸", "US-W": "🇺🇸", EU: "🇪🇺", SEA: "🇸🇬", AUS: "🇦🇺", SA: "🌎", JPN: "🇯🇵", ME: "🇦🇪", SAF: "🇿🇦", ALL: "🌐" };
+export const regionTag = (r) => { const k = String(r ?? "").trim().toUpperCase(); return k ? (FLAGS[k] ? `${FLAGS[k]} ${k}` : k) : "—"; };
+
+// Cabeça da lenda (emoji do app) com fallback; aceita { slug, name } ou só o nome.
+export const legendHead = (l) => legendEmoji(l?.slug || (l?.name ? slug(l.name) : "")) || "⚔️";
+
+// Nome(s) de jogador clicável(is) → perfil no GraceHalla. Em 2v2 cada nome leva ao seu próprio perfil.
+export function nameLinks(nms, ids, max = 24) {
+  const a = nms?.length ? nms : ["?"];
+  const cut = (t, m) => (t.length > m ? t.slice(0, m - 1) + "…" : t);
+  if (ids?.length === a.length) { const m = a.length > 1 ? 14 : max; return a.map((nm, k) => `[${esc(cut(String(nm), m))}](${playerHref(ids[k])})`).join(" & "); }
+  const txt = esc(cut(a.join(" & "), max));
+  return ids?.length ? `[${txt}](${playerHref(ids[0])})` : txt;
+}
 
 // ---------- ranks ----------
 const TIERS = {
@@ -33,11 +55,11 @@ const TIERS = {
 export function tierInfo(tier) {
   const w = String(tier ?? "").trim().split(/\s+/)[0].toLowerCase();
   const key = w.startsWith("valhall") ? "Valhallan" : Object.keys(TIERS).find((t) => t.toLowerCase() === w);
-  return key ? { key, color: parseInt(TIERS[key][0].slice(1), 16), emoji: TIERS[key][1] } : { key: null, color: ACCENT, emoji: "▫️" };
+  return key ? { key, color: parseInt(TIERS[key][0].slice(1), 16), emoji: rankEmoji(key) || TIERS[key][1] } : { key: null, color: ACCENT, emoji: "▫️" };
 }
 
 // ---------- jogador ----------
-function summarize(p) {
+export function summarize(p) {
   const L = p.legends ?? [];
   const sum = (f) => L.reduce((a, l) => a + (Number(f(l)) || 0), 0);
   const main = [...L].sort((a, b) => (b.stats?.games ?? 0) - (a.stats?.games ?? 0))[0];
@@ -76,7 +98,7 @@ export function profileEmbed(p, tab = "overview", extra = {}) {
       { name: "Games", value: `**${n(r.games)}**`, inline: true },
       { name: "Wins", value: `**${n(r.wins)}**`, inline: true },
       { name: "Win rate", value: `**${pct(r.wins, r.games)}**`, inline: true },
-      { name: "Region", value: `**${(r.region ?? "—").toUpperCase()}**`, inline: true },
+      { name: "Region", value: `**${regionTag(r.region)}**`, inline: true },
       { name: "Regional rank", value: extra.regionRank ? `**#${n(extra.regionRank)}**` : "—", inline: true },
       { name: "Peak elo", value: `**${n(r.peak_rating)}**`, inline: true },
     );
@@ -154,7 +176,7 @@ export function searchMessage(query, rows) {
   if (!list.length) return { embeds: [e.setTitle("No players found").setDescription(`Nothing for **${query}**.\nTry the exact in-game name, or look the player up by ID with \`/profile id:\`.`)], components: [] };
   e.setTitle(`Results for “${query}”`).setDescription(list.map((r) => {
     const t = tierInfo(r.tier);
-    return `**${r.rank ? "#" + n(r.rank) : "·"}**  ${t.emoji}  **${r.name}**  ·  ${r.tier ?? ""} ${n(r.rating)}  ·  ${String(r.region ?? "").toUpperCase()}`;
+    return `**${r.rank ? "#" + n(r.rank) : "·"}**  ${t.emoji}  **[${esc(r.name)}](${playerHref(r.id)})**  ·  ${r.tier ?? ""} ${n(r.rating)}  ·  ${regionTag(r.region)}`;
   }).join("\n"));
   const menu = new StringSelectMenuBuilder().setCustomId("search:pick").setPlaceholder("Open a profile…").addOptions(list.map((r) => ({
     label: String(r.name).slice(0, 100), description: `${r.tier ?? ""} ${n(r.rating)} elo · ID ${r.id}`.slice(0, 100), value: String(r.id),
@@ -173,13 +195,13 @@ export const noticeMessage = (title, text, color = ACCENT) => ({ embeds: [new Em
 export const errorMessage = (text) => noticeMessage("Something went wrong", text, ERROR_COLOR);
 
 // ---------- Live Ranked ----------
-// Um único embed compacto: resumo, jogadores (2 linhas cada) e últimas partidas (1 linha cada).
-const trend = (d) => (d > 0 ? `▲ **${signed(d)}**` : d < 0 ? `▼ **${signed(d)}**` : `▬ **±0**`);
+// Cada jogador: emblema do rank + nome clicável (perfil no site) + elo; embaixo, a cabeça da lenda em uso + sessão.
+export const trend = (d) => (d > 0 ? `▲ **${signed(d)}**` : d < 0 ? `▼ **${signed(d)}**` : `▬ **±0**`);
 const hasId = (m, p) => (m.ids ?? []).some((id) => (p.ids ?? []).includes(id));
 const isWin = (m) => m.wins >= m.losses;
-const shortName = (a, max = 22) => { const s = names(a); return s.length > max ? s.slice(0, max - 1) + "…" : s; };
+const ago = (t) => `<t:${Math.floor(t / 1000)}:R>`;
 
-const PLAYERS_SHOWN = 4, MATCHES_SHOWN = 6;
+const PLAYERS_SHOWN = 5, MATCHES_SHOWN = 5;
 
 // sequência atual (3+ vitórias ou derrotas seguidas), a partir da partida mais recente
 function streak(recentFirst) {
@@ -190,16 +212,16 @@ function streak(recentFirst) {
 }
 
 function playerLines(p, feed) {
-  const t = tierInfo(p.tier), s = p.session;
-  const dot = p.status === "active" ? "🟢" : "⚪";
-  const l1 = `${dot}  ${t.emoji}  **${n(p.rating)}**${s?.games ? `   ${trend(s.delta)}` : ""}   **${shortName(p.names)}**`;
+  const t = tierInfo(p.tier), s = p.session, active = p.status === "active";
+  const l1 = `${t.emoji}  ${nameLinks(p.names, p.ids)}  ·  **${n(p.rating)}**${s?.games ? `  ${trend(s.delta)}` : ""}${active ? "  ·  ⚡ **in game**" : ""}`;
   const sub = [];
-  if (p.legend?.name) sub.push(`⚔️ ${pretty(p.legend.name)}`);
+  if (p.legend?.name) sub.push(`${legendHead(p.legend)} **${pretty(p.legend.name)}**`);
   if (s?.games) sub.push(`${s.wins}W ${s.losses}L (${pct(s.wins, s.games)})`);
   if (p.rank) sub.push(`#${n(p.rank)}`);
+  if (!active && p.lastT) sub.push(`last game ${ago(p.lastT)}`);
   const st = streak(feed.filter((m) => hasId(m, p)).slice(0, 6));
   if (st) sub.push(st);
-  return sub.length ? `${l1}\n-# ${sub.join("  ·  ")}` : l1;
+  return sub.length ? `${l1}\n${sub.join("  ·  ")}` : l1;
 }
 
 export function liveEmbeds(v) {
@@ -208,12 +230,16 @@ export function liveEmbeds(v) {
   const feed = v.feed ?? [];
   const active = all.filter((p) => p.status === "active");
 
-  const head = [`🟢 **${active.length}** playing  ·  🎮 **${n(v.hour?.games)}** games/hour${v.hour?.games ? `  ·  📊 **${pct(v.hour.wins, v.hour.games)}** wins` : ""}`];
-  if (v.hour?.bestGain) head.push(`🔥 Best gain  **${shortName(v.hour.bestGain.names, 28)}**  ▲ **${signed(v.hour.bestGain.delta)}**`);
+  const head = [`⚡ **${active.length}** in game  ·  🎮 **${n(v.hour?.games)}** games/hour${v.hour?.games ? `  ·  📊 **${pct(v.hour.wins, v.hour.games)}** wins` : ""}`];
+  const bg = v.hour?.bestGain;
+  if (bg) {
+    const who = all.find((p) => (p.names ?? []).join("|") === (bg.names ?? []).join("|"));
+    head.push(`🔥 Best gain  ${who ? nameLinks(who.names, who.ids, 28) : `**${esc(names(bg.names))}**`}  ▲ **${signed(bg.delta)}**`);
+  }
   if (v.cold) head.push("*Warming up: I need two snapshots to spot matches. Check back in a couple of minutes.*");
   if (v.stale) head.push("*Official API hiccup: showing the last known state.*");
 
-  const e = new EmbedBuilder().setColor(ACCENT).setTitle(`Live Ranked  ·  ${mode}  ·  ${v.region}`).setURL(`${SITE}/live`)
+  const e = new EmbedBuilder().setColor(ACCENT).setTitle(`Live Ranked  ·  ${mode}  ·  ${regionTag(v.region)}`).setURL(`${SITE}/live`)
     .setAuthor({ name: "GraceHalla  ·  Live", iconURL: `${SITE}/apple-icon.png` })
     .setFooter({ text: "Detected from the ranked leaderboard  ·  updates every ~2 min", iconURL: `${SITE}/apple-icon.png` })
     .setTimestamp(v.ts ? new Date(v.ts) : new Date());
@@ -223,14 +249,16 @@ export function liveEmbeds(v) {
   const shown = ranked.slice(0, PLAYERS_SHOWN);
   const lead = shown.find((p) => p.legend?.name);
   if (lead) e.setThumbnail(legendIcon(lead.legend.name));
-  if (all.length > PLAYERS_SHOWN) head.push(`-# +${all.length - PLAYERS_SHOWN} more on the [site](${SITE}/live)`);
-  e.setDescription(head.join("\n"));
 
-  if (shown.length) e.addFields({ name: "Players", value: clip(shown.map((p) => playerLines(p, feed)).join("\n\n")) });
-  else if (!v.cold) e.addFields({ name: "Players", value: "*Nobody tracked right now.*" });
+  const body = [head.join("\n")];
+  if (shown.length) {
+    body.push("**Players**\n" + shown.map((p) => playerLines(p, feed)).join("\n\n"));
+    if (all.length > PLAYERS_SHOWN) body.push(`-# +${all.length - PLAYERS_SHOWN} more on the [site](${SITE}/live)`);
+  } else if (!v.cold) body.push("**Players**\n*Nobody tracked right now.*");
+  e.setDescription(clip(body.join("\n\n"), 3800));
 
   const rows = feed.slice(0, MATCHES_SHOWN).map((m) =>
-    `${isWin(m) ? "🟩" : "🟥"} **${shortName(m.names, 18)}**  ${trend(m.delta)} → **${n(m.rating)}**${m.legend?.name ? `  ·  ${pretty(m.legend.name)}` : ""}  ·  ${`<t:${Math.floor(m.t / 1000)}:R>`}`);
+    `${isWin(m) ? "🟩" : "🟥"} ${tierInfo(m.tier).emoji} ${nameLinks(m.names, m.ids, 18)}  ${trend(m.delta)} → **${n(m.rating)}**${m.legend?.name ? `  ${legendHead(m.legend)}` : ""}  ${ago(m.t)}`);
   if (rows.length) e.addFields({ name: "Latest matches", value: clip(rows.join("\n")) });
   else if (!v.cold) e.addFields({ name: "Latest matches", value: "*No matches detected yet.*" });
   return [e];

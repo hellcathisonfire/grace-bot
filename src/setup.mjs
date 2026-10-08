@@ -5,12 +5,16 @@ import { readFile } from "node:fs/promises";
 import { REST, Routes } from "discord.js";
 import { payload } from "./commands.mjs";
 import { getMeta, setMeta } from "./store.mjs";
+import { initEmojis } from "./emoji.mjs";
 
 const sha = (x) => createHash("sha256").update(x).digest("hex").slice(0, 16);
 
 export async function ensureSetup(appId) {
   const rest = new REST().setToken(process.env.DISCORD_TOKEN);
   const guild = process.env.DISCORD_GUILD_ID || "";
+
+  try { await initEmojis(rest, appId); }                                   // emblemas de rank + cabeças das lendas (emojis do app)
+  catch (e) { console.error("Não consegui preparar os emojis (os cards usam emojis comuns no lugar):", e.message); }
 
   try {
     const body = payload();
