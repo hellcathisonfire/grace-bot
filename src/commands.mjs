@@ -21,6 +21,8 @@ export const commands = [
     .addSubcommand((s) => s.setName("stop").setDescription("Stop and remove this server's panel")),
   // "Grace Offenders": nome de slash command não aceita espaço nem maiúscula, então é /offenders. Só o dono do bot + senha (src/auth.mjs).
   new SlashCommandBuilder().setName("offenders").setDescription("Grace Offenders · restricted"),
+  // Lista pública (só leitura) dos mesmos jogadores sinalizados.
+  new SlashCommandBuilder().setName("dexbotters").setDescription("See the players flagged for using Dexbot"),
 ];
 
 export const payload = () => commands.map((c) => c.toJSON());

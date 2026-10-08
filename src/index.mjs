@@ -5,7 +5,7 @@ import { ApiError, getLive, getPlayer, getRegionRank, isBhId, searchRanked } fro
 import { getLink, getPanels, removeLink, setLink, setPanels, usingRedis } from "./store.mjs";
 import { startHealth } from "./health.mjs";
 import { ensureSetup } from "./setup.mjs";
-import { component as offComponent, modal as offModal, open as offOpen, tickOffPanels } from "./offenders.mjs";
+import { component as offComponent, dbxComponent, dbxOpen, modal as offModal, open as offOpen, tickOffPanels } from "./offenders.mjs";
 import { errorMessage, liveEmbeds, liveMessage, linkedMessage, noticeMessage, profileMessage, searchMessage } from "./ui.mjs";
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
@@ -31,6 +31,7 @@ async function fail(i, e) {
 
 // ---------- comandos ----------
 export const handlers = {
+  dexbotters: dbxOpen,                                    // lista pública, só leitura
   offenders: offOpen,                                     // Grace Offenders: só o dono + senha (src/offenders.mjs)
 
   async link(i) {
@@ -105,6 +106,7 @@ export const handlers = {
 // ---------- botões e menus ----------
 export async function component(i) {
   const [kind, a, b, c] = i.customId.split(":");
+  if (kind === "dbx") return dbxComponent(i);
   if (kind === "off") return offComponent(i);             // responde por conta própria (abre modal, confere o dono)
   await i.deferUpdate();
   if (kind === "pf") {                                    // pf:<aba>:<id>

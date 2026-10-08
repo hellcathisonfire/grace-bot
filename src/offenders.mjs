@@ -54,21 +54,23 @@ function rowLines(x, { notes }) {
   return out.join("\n");
 }
 
-export function offendersEmbeds(rows, { notes = true, ts } = {}) {
+export const pageCount = (total) => Math.max(1, Math.ceil(total / SHOWN));
+
+export function offendersEmbeds(rows, { notes = true, ts, page = 0 } = {}) {
   const sorted = [...rows].sort((a, b) => (b.hit?.status === "active") - (a.hit?.status === "active") || (b.hit?.rating ?? b.r?.rating ?? 0) - (a.hit?.rating ?? a.r?.rating ?? 0));
   const live = sorted.filter((x) => x.hit?.status === "active");
+  const pages = pageCount(rows.length), pg = Math.max(0, Math.min(page, pages - 1));
   const e = new EmbedBuilder().setColor(live.length ? RED : DARK_RED).setTitle("Grace Offenders").setURL(`${SITE}/live`)
     .setAuthor({ name: "GraceHalla  ·  Dexbot watchlist", iconURL: `${SITE}/apple-icon.png` })
-    .setFooter({ text: "Flagged for Dexbot (auto-dodge / auto-attack)  ·  live data ~2 min", iconURL: `${SITE}/apple-icon.png` })
+    .setFooter({ text: `Flagged for Dexbot (auto-dodge / auto-attack)  ·  live data ~2 min${pages > 1 ? `  ·  page ${pg + 1}/${pages}` : ""}`, iconURL: `${SITE}/apple-icon.png` })
     .setTimestamp(ts ? new Date(ts) : new Date());
-  if (!rows.length) return [e.setDescription("*Nobody flagged yet.*\nPress **Add** and send a Brawlhalla ID to start the list.")];
+  if (!rows.length) return [e.setDescription(notes ? "*Nobody flagged yet.*\nPress **Add** and send a Brawlhalla ID to start the list." : "*Nobody is on the list right now.*")];
 
   const head = `🚫 **${rows.length}** flagged  ·  ${live.length ? `🚨 **${live.length}** in game right now` : "nobody in game right now"}`;
-  const take = sorted.slice(0, SHOWN), liveShown = take.filter((x) => x.hit?.status === "active"), rest = take.filter((x) => x.hit?.status !== "active");
+  const take = sorted.slice(pg * SHOWN, (pg + 1) * SHOWN), liveShown = take.filter((x) => x.hit?.status === "active"), rest = take.filter((x) => x.hit?.status !== "active");
   const parts = [head];
   if (liveShown.length) parts.push("**🚨 Playing right now**\n" + liveShown.map((x) => rowLines(x, { notes })).join("\n\n"));
   if (rest.length) parts.push("**Watchlist**\n" + rest.map((x) => rowLines(x, { notes })).join("\n\n"));
-  if (rows.length > SHOWN) parts.push(`-# +${rows.length - SHOWN} more flagged (not shown)`);
   e.setDescription(clipTxt(parts.join("\n\n"), 3900));
   const lead = (liveShown[0] ?? take[0]);
   const lg = lead?.hit?.legend?.name ?? (lead?.p ? summarize(lead.p).main?.name : null);
@@ -185,6 +187,31 @@ export async function component(i) {
     await followUp(act === "pin" ? "Live panel pinned" : "Posted", act === "pin" ? "It refreshes itself every ~2 minutes. Your private notes are never shown there." : "Posted in this channel (your private notes are hidden).");
     return i.editReply(await dashboard(i));
   }
+}
+
+// ---------- /dexbotters: lista PÚBLICA, só leitura (qualquer pessoa vê; ninguém adiciona nem remove) ----------
+function dbxComponents(page, pages) {
+  const btn = (id, label, emoji) => new ButtonBuilder().setCustomId(id).setEmoji(emoji).setStyle(ButtonStyle.Secondary).setLabel(label);
+  const row = new ActionRowBuilder();
+  if (pages > 1) row.addComponents(new ButtonBuilder().setCustomId(`dbx:p:${page - 1}`).setEmoji("◀️").setStyle(ButtonStyle.Secondary).setDisabled(page <= 0));
+  row.addComponents(btn(`dbx:r:${page}`, "Refresh", "🔄"));
+  if (pages > 1) row.addComponents(new ButtonBuilder().setCustomId(`dbx:p:${page + 1}`).setEmoji("▶️").setStyle(ButtonStyle.Secondary).setDisabled(page >= pages - 1));
+  row.addComponents(new ButtonBuilder().setLabel("Open site").setStyle(ButtonStyle.Link).setURL(`${SITE}/live`));
+  return [row];
+}
+
+async function dbxMessage(page) {
+  const rows = await loadRows(await getOffenders());
+  const pages = pageCount(rows.length), pg = Math.max(0, Math.min(page, pages - 1));
+  return { embeds: offendersEmbeds(rows, { notes: false, page: pg }), components: dbxComponents(pg, pages) };   // sem as anotações privadas
+}
+
+export async function dbxOpen(i) { await i.deferReply(); return i.editReply(await dbxMessage(0)); }
+
+export async function dbxComponent(i) {
+  const [, , arg] = i.customId.split(":");                      // dbx:p:<página> | dbx:r:<página>
+  await i.deferUpdate();
+  return i.editReply(await dbxMessage(Number(arg) || 0));
 }
 
 // ---------- painéis fixados (chamado a cada ~2 min pelo index) ----------
