@@ -2,9 +2,13 @@
 import { REST, Routes } from "discord.js";
 import { payload } from "./commands.mjs";
 
-const { DISCORD_TOKEN: token, DISCORD_CLIENT_ID: app, DISCORD_GUILD_ID: guild } = process.env;
+const { DISCORD_TOKEN: token, DISCORD_CLIENT_ID: app } = process.env;
+const guilds = (process.env.DISCORD_GUILD_ID || "").split(/[\s,]+/).filter(Boolean);
 if (!token || !app) { console.error("Preencha DISCORD_TOKEN e DISCORD_CLIENT_ID no arquivo bot/.env"); process.exit(1); }
 const rest = new REST().setToken(token);
-const route = guild ? Routes.applicationGuildCommands(app, guild) : Routes.applicationCommands(app);
-const out = await rest.put(route, { body: payload() });
-console.log(`${out.length} comandos registrados ${guild ? "no servidor " + guild : "globalmente (pode levar até 1 h)"}: ${out.map((c) => "/" + c.name).join(" ")}`);
+if (guilds.length) {
+  for (const g of guilds) { const out = await rest.put(Routes.applicationGuildCommands(app, g), { body: payload() }); console.log(`${out.length} comandos registrados no servidor ${g}`); }
+} else {
+  const out = await rest.put(Routes.applicationCommands(app), { body: payload() });
+  console.log(`${out.length} comandos registrados globalmente (pode levar até 1 h): ${out.map((c) => "/" + c.name).join(" ")}`);
+}

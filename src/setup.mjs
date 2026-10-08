@@ -11,18 +11,19 @@ const sha = (x) => createHash("sha256").update(x).digest("hex").slice(0, 16);
 
 export async function ensureSetup(appId) {
   const rest = new REST().setToken(process.env.DISCORD_TOKEN);
-  const guild = process.env.DISCORD_GUILD_ID || "";
+  const guilds = (process.env.DISCORD_GUILD_ID || "").split(/[\s,]+/).filter(Boolean);   // vários servidores: IDs separados por vírgula; vazio = global
 
   try { await initEmojis(rest, appId); }                                   // emblemas de rank + cabeças das lendas (emojis do app)
   catch (e) { console.error("Não consegui preparar os emojis (os cards usam emojis comuns no lugar):", e.message); }
 
   try {
     const body = payload();
-    const h = sha(JSON.stringify(body) + (guild || "global"));
+    const h = sha(JSON.stringify(body) + (guilds.join(",") || "global"));
     if ((await getMeta("cmdHash")) !== h) {
-      await rest.put(guild ? Routes.applicationGuildCommands(appId, guild) : Routes.applicationCommands(appId), { body });
+      if (guilds.length) for (const g of guilds) await rest.put(Routes.applicationGuildCommands(appId, g), { body });
+      else await rest.put(Routes.applicationCommands(appId), { body });
       await setMeta("cmdHash", h);
-      console.log(`Comandos registrados ${guild ? "no servidor " + guild : "globalmente (podem levar até 1 h para aparecer)"}.`);
+      console.log(`Comandos registrados ${guilds.length ? "no(s) servidor(es) " + guilds.join(", ") : "globalmente (podem levar até 1 h para aparecer)"}.`);
     }
   } catch (e) { console.error("Não consegui registrar os comandos:", e.message); }
 

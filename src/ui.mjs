@@ -258,7 +258,7 @@ export function liveEmbeds(v) {
   e.setDescription(clip(body.join("\n\n"), 3800));
 
   const rows = feed.slice(0, MATCHES_SHOWN).map((m) =>
-    `${isWin(m) ? "🟩" : "🟥"} ${tierInfo(m.tier).emoji} ${nameLinks(m.names, m.ids, 18)}  ${trend(m.delta)} → **${n(m.rating)}**${m.legend?.name ? `  ${legendHead(m.legend)}` : ""}  ${ago(m.t)}`);
+    `${tierInfo(m.tier).emoji} ${nameLinks(m.names, m.ids, 18)}  ${trend(m.delta)} → **${n(m.rating)}**${m.legend?.name ? `  ${legendHead(m.legend)}` : ""}  ${ago(m.t)}`);
   if (rows.length) e.addFields({ name: "Latest matches", value: clip(rows.join("\n")) });
   else if (!v.cold) e.addFields({ name: "Latest matches", value: "*No matches detected yet.*" });
   return [e];
