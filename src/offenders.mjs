@@ -37,7 +37,7 @@ export async function loadRows(list) {
 }
 
 // ---------- visual ----------
-function rowLines(x, { notes }) {
+function rowLines(x) {
   const { o, p, r, hit } = x;
   const active = hit?.status === "active";
   const rating = hit?.rating ?? r?.rating, tier = hit?.tier ?? r?.tier, t = tierInfo(tier), s = hit?.session;
@@ -50,13 +50,13 @@ function rowLines(x, { notes }) {
   else if (r?.games) sub.push(`${n(r.wins)}W ${n(r.games - r.wins)}L overall`);
   if (!active) sub.push(hit?.lastT ? `last game ${ago(hit.lastT)}` : "not on the tracked board right now");
   const out = [l1, sub.join("  ·  ")];
-  if (notes && o.note) out.push(`-# 📝 ${o.note.replace(/\s+/g, " ").slice(0, 160)}`);
+  if (o.note) out.push(`📝 ${o.note.replace(/\s+/g, " ").slice(0, 200)}`);                  // a nota é pública: todo mundo vê
   return out.join("\n");
 }
 
 export const pageCount = (total) => Math.max(1, Math.ceil(total / SHOWN));
 
-export function offendersEmbeds(rows, { notes = true, ts, page = 0 } = {}) {
+export function offendersEmbeds(rows, { owner = false, ts, page = 0 } = {}) {
   const sorted = [...rows].sort((a, b) => (b.hit?.status === "active") - (a.hit?.status === "active") || (b.hit?.rating ?? b.r?.rating ?? 0) - (a.hit?.rating ?? a.r?.rating ?? 0));
   const live = sorted.filter((x) => x.hit?.status === "active");
   const pages = pageCount(rows.length), pg = Math.max(0, Math.min(page, pages - 1));
@@ -64,13 +64,13 @@ export function offendersEmbeds(rows, { notes = true, ts, page = 0 } = {}) {
     .setAuthor({ name: "GraceHalla  ·  Dexbot watchlist", iconURL: `${SITE}/apple-icon.png` })
     .setFooter({ text: `Flagged for Dexbot (auto-dodge / auto-attack)  ·  live data ~2 min${pages > 1 ? `  ·  page ${pg + 1}/${pages}` : ""}`, iconURL: `${SITE}/apple-icon.png` })
     .setTimestamp(ts ? new Date(ts) : new Date());
-  if (!rows.length) return [e.setDescription(notes ? "*Nobody flagged yet.*\nPress **Add** and send a Brawlhalla ID to start the list." : "*Nobody is on the list right now.*")];
+  if (!rows.length) return [e.setDescription(owner ? "*Nobody flagged yet.*\nPress **Add** and send a Brawlhalla ID to start the list." : "*Nobody is on the list right now.*")];
 
   const head = `🚫 **${rows.length}** flagged  ·  ${live.length ? `🚨 **${live.length}** in game right now` : "nobody in game right now"}`;
   const take = sorted.slice(pg * SHOWN, (pg + 1) * SHOWN), liveShown = take.filter((x) => x.hit?.status === "active"), rest = take.filter((x) => x.hit?.status !== "active");
   const parts = [head];
-  if (liveShown.length) parts.push("**🚨 Playing right now**\n" + liveShown.map((x) => rowLines(x, { notes })).join("\n\n"));
-  if (rest.length) parts.push("**Watchlist**\n" + rest.map((x) => rowLines(x, { notes })).join("\n\n"));
+  if (liveShown.length) parts.push("**🚨 Playing right now**\n" + liveShown.map((x) => rowLines(x)).join("\n\n"));
+  if (rest.length) parts.push("**Watchlist**\n" + rest.map((x) => rowLines(x)).join("\n\n"));
   e.setDescription(clipTxt(parts.join("\n\n"), 3900));
   const lead = (liveShown[0] ?? take[0]);
   const lg = lead?.hit?.legend?.name ?? (lead?.p ? summarize(lead.p).main?.name : null);
@@ -94,17 +94,17 @@ const passwordModal = () => new ModalBuilder().setCustomId("off:auth").setTitle(
 
 const addModal = () => new ModalBuilder().setCustomId("off:addm").setTitle("Flag a player").addComponents(
   new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("id").setLabel("Brawlhalla ID (numbers only)").setStyle(TextInputStyle.Short).setRequired(true).setMinLength(1).setMaxLength(12)),
-  new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("note").setLabel("Evidence / note (only you see it)").setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(200).setPlaceholder("e.g. perfect dodges on every reaction, clip link…")));
+  new ActionRowBuilder().addComponents(new TextInputBuilder().setCustomId("note").setLabel("Evidence / note (everyone can see it)").setStyle(TextInputStyle.Paragraph).setRequired(false).setMaxLength(200).setPlaceholder("e.g. perfect dodges on every reaction, clip link…")));
 
 async function dashboard(i) {
   const list = await getOffenders();
   const rows = await loadRows(list);
   const pinned = i.guildId ? (await getOffPanels()).some((p) => p.guildId === i.guildId) : false;
-  return { embeds: offendersEmbeds(rows, { notes: true }), components: offComponents({ guild: Boolean(i.guildId), pinned, any: list.length > 0 }) };
+  return { embeds: offendersEmbeds(rows, { owner: true }), components: offComponents({ guild: Boolean(i.guildId), pinned, any: list.length > 0 }) };
 }
 
-const restricted = () => ({ ...noticeMessage("Restricted", "This command is only for Grace's owner."), flags: EPHEMERAL });
-const lockedMsg = (until) => ({ ...noticeMessage("Too many attempts", `Locked. Try again ${ago(until)}.`, ERROR_COLOR), flags: EPHEMERAL });
+export const restricted = () => ({ ...noticeMessage("Restricted", "This command is only for Grace's owner."), flags: EPHEMERAL });
+export const lockedMsg = (until) => ({ ...noticeMessage("Too many attempts", `Locked. Try again ${ago(until)}.`, ERROR_COLOR), flags: EPHEMERAL });
 
 // ---------- /offenders ----------
 export async function open(i) {
@@ -182,9 +182,9 @@ export async function component(i) {
     if (!perms?.has("SendMessages") || !perms.has("EmbedLinks")) return followUp("Missing permissions", "I need **Send Messages** and **Embed Links** in this channel.", ERROR_COLOR);
     const rows = await loadRows(await getOffenders());
     const link = new ActionRowBuilder().addComponents(new ButtonBuilder().setLabel("Open GraceHalla").setStyle(ButtonStyle.Link).setURL(`${SITE}/live`));
-    const msg = await channel.send({ embeds: offendersEmbeds(rows, { notes: false }), components: [link] });   // público: sem as suas anotações
+    const msg = await channel.send({ embeds: offendersEmbeds(rows), components: [link] });   // público (as notas aparecem para todos)
     if (act === "pin") await setOffPanels([...(await getOffPanels()).filter((p) => p.guildId !== i.guildId), { guildId: i.guildId, channelId: channel.id, messageId: msg.id }]);
-    await followUp(act === "pin" ? "Live panel pinned" : "Posted", act === "pin" ? "It refreshes itself every ~2 minutes. Your private notes are never shown there." : "Posted in this channel (your private notes are hidden).");
+    await followUp(act === "pin" ? "Live panel pinned" : "Posted", act === "pin" ? "It refreshes itself every ~2 minutes." : "Posted in this channel.");
     return i.editReply(await dashboard(i));
   }
 }
@@ -203,7 +203,7 @@ function dbxComponents(page, pages) {
 async function dbxMessage(page) {
   const rows = await loadRows(await getOffenders());
   const pages = pageCount(rows.length), pg = Math.max(0, Math.min(page, pages - 1));
-  return { embeds: offendersEmbeds(rows, { notes: false, page: pg }), components: dbxComponents(pg, pages) };   // sem as anotações privadas
+  return { embeds: offendersEmbeds(rows, { page: pg }), components: dbxComponents(pg, pages) };   // sem as anotações privadas
 }
 
 export async function dbxOpen(i) { await i.deferReply(); return i.editReply(await dbxMessage(0)); }
@@ -219,7 +219,7 @@ export async function tickOffPanels(client) {
   const panels = await getOffPanels();
   if (!panels.length) return;
   const rows = await loadRows(await getOffenders());
-  const embeds = offendersEmbeds(rows, { notes: false });
+  const embeds = offendersEmbeds(rows);
   const keep = [];
   for (const pn of panels) {
     try {

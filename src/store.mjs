@@ -28,6 +28,7 @@ async function load() {
   doc.meta ??= {};
   doc.offenders ??= [];
   doc.offPanels ??= [];
+  doc.reports ??= [];
   return doc;
 }
 
@@ -56,3 +57,7 @@ export async function getOffenders() { return (await load()).offenders; }
 export async function setOffenders(list) { (await load()).offenders = list; await save(); }
 export async function getOffPanels() { return (await load()).offPanels; }
 export async function setOffPanels(list) { (await load()).offPanels = list; await save(); }
+
+// Denúncias do /dexreport ({ id, name, bhId, region, proof, by, at }): só os donos veem, via /trashbotters.
+export async function getReports() { return (await load()).reports; }
+export async function setReports(list) { (await load()).reports = list; await save(); }

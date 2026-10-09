@@ -192,6 +192,31 @@ export const linkedMessage = (p) => ({ embeds: [new EmbedBuilder().setColor(ACCE
   .setFooter({ text: "Linking uses your public Brawlhalla ID, there is no password." })] });
 
 export const noticeMessage = (title, text, color = ACCENT) => ({ embeds: [new EmbedBuilder().setColor(color).setTitle(title).setDescription(text)], components: [] });
+// /cmndlist: lista só os comandos públicos (os de dono ficam de fora de propósito).
+export const helpMessage = () => ({
+  embeds: [new EmbedBuilder().setColor(ACCENT).setTitle("Grace · commands")
+    .setAuthor({ name: "GraceHalla", iconURL: `${SITE}/apple-icon.png` })
+    .setDescription(`Brawlhalla stats, live ranked and the Dexbot watchlist, straight from Discord. Full stats on the [site](${SITE}).`)
+    .addFields(
+      { name: "👤 Your account", value: [
+        "`/link id:<ID>` links your Discord to your Brawlhalla account (numbers only).",
+        "`/unlink` removes that link.",
+        "`/profile` shows a player profile with Overview, Ranked, Legends and Combat tabs. Yours by default, or pick a `user` who linked, or any `id`.",
+        "`/search name:<name>` finds ranked players by name, with rank, elo and region.",
+      ].join("\n") },
+      { name: "⚡ Live ranked", value: [
+        "`/live` shows who is playing ranked right now, with elo changes and the latest matches. Choose `mode` (1v1, 2v2, Rotating) and `region` (default BRZ).",
+        "`/livepanel start` posts a live panel that refreshes itself every ~2 minutes; `/livepanel stop` removes it. Needs the **Manage Server** permission.",
+      ].join("\n") },
+      { name: "🚫 Dexbot watch", value: [
+        "`/dexbotters` shows the players flagged for using Dexbot (auto-dodge / auto-attack), and who is in a match right now.",
+        "`/dexreport` lets you report a suspected Dexbot user with their name, ID, region and proof. Reports are private, only the owners see them.",
+      ].join("\n") },
+      { name: "❓ Help", value: "`/cmndlist` shows this list." },
+    )
+    .setFooter({ text: "Grace · GraceHalla", iconURL: `${SITE}/apple-icon.png` })],
+  components: [],
+});
 export const errorMessage = (text) => noticeMessage("Something went wrong", text, ERROR_COLOR);
 
 // ---------- Live Ranked ----------

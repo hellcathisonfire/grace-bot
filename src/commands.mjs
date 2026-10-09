@@ -19,10 +19,14 @@ export const commands = [
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild).setContexts(InteractionContextType.Guild)
     .addSubcommand((s) => s.setName("start").setDescription("Post a self-updating panel in this channel").addStringOption(modeOpt).addStringOption(regionOpt))
     .addSubcommand((s) => s.setName("stop").setDescription("Stop and remove this server's panel")),
+  new SlashCommandBuilder().setName("cmndlist").setDescription("List all of Grace's commands and what they do"),
   // "Grace Offenders": nome de slash command não aceita espaço nem maiúscula, então é /offenders. Só o dono do bot + senha (src/auth.mjs).
   new SlashCommandBuilder().setName("offenders").setDescription("Grace Offenders · restricted"),
   // Lista pública (só leitura) dos mesmos jogadores sinalizados.
   new SlashCommandBuilder().setName("dexbotters").setDescription("See the players flagged for using Dexbot"),
+  // Denúncias: qualquer pessoa envia (/dexreport); só os donos leem, com a mesma senha (/trashbotters).
+  new SlashCommandBuilder().setName("dexreport").setDescription("Report a Dexbot user (private, only the owners see it)"),
+  new SlashCommandBuilder().setName("trashbotters").setDescription("Dexbot reports · restricted"),
 ];
 
 export const payload = () => commands.map((c) => c.toJSON());

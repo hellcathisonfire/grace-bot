@@ -5,8 +5,9 @@ import { ApiError, getLive, getPlayer, getRegionRank, isBhId, searchRanked } fro
 import { getLink, getPanels, removeLink, setLink, setPanels, usingRedis } from "./store.mjs";
 import { startHealth } from "./health.mjs";
 import { ensureSetup } from "./setup.mjs";
+import { component as repComponent, dexreport, modal as repModal, trashbotters } from "./reports.mjs";
 import { component as offComponent, dbxComponent, dbxOpen, modal as offModal, open as offOpen, tickOffPanels } from "./offenders.mjs";
-import { errorMessage, liveEmbeds, liveMessage, linkedMessage, noticeMessage, profileMessage, searchMessage } from "./ui.mjs";
+import { errorMessage, helpMessage, liveEmbeds, liveMessage, linkedMessage, noticeMessage, profileMessage, searchMessage } from "./ui.mjs";
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds] });
 const EPHEMERAL = MessageFlags.Ephemeral;
@@ -31,6 +32,10 @@ async function fail(i, e) {
 
 // ---------- comandos ----------
 export const handlers = {
+  async cmndlist(i) { await i.reply(helpMessage()); },                    // pública: todo mundo no canal vê
+
+  dexreport,                                              // denúncia (qualquer pessoa) → fica privada
+  trashbotters,                                           // lista de denúncias: só donos + senha
   dexbotters: dbxOpen,                                    // lista pública, só leitura
   offenders: offOpen,                                     // Grace Offenders: só o dono + senha (src/offenders.mjs)
 
@@ -107,6 +112,7 @@ export const handlers = {
 export async function component(i) {
   const [kind, a, b, c] = i.customId.split(":");
   if (kind === "dbx") return dbxComponent(i);
+  if (kind === "rep") return repComponent(i);
   if (kind === "off") return offComponent(i);             // responde por conta própria (abre modal, confere o dono)
   await i.deferUpdate();
   if (kind === "pf") {                                    // pf:<aba>:<id>
@@ -126,7 +132,7 @@ client.on(Events.InteractionCreate, async (i) => {
   try {
     if (i.isChatInputCommand()) return void (await handlers[i.commandName]?.(i));
     if (i.isButton() || i.isStringSelectMenu()) return void (await component(i));
-    if (i.isModalSubmit()) return void (await offModal(i));
+    if (i.isModalSubmit()) return void (await (i.customId.startsWith("rep:") ? repModal(i) : offModal(i)));
   } catch (e) { await fail(i, e); }
 });
 
